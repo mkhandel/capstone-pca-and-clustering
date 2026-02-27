@@ -65,14 +65,66 @@ def add_time_and_category_features(df):
     )
 
     df["Month"] = df["Creation Date"].dt.month
+    df["Year"] = df["Creation Date"].dt.year
     df["Is_Weekend"] = df["Creation Date"].dt.weekday >= 5
     df["Is_Night"] = df["Hour"].between(22, 23) | df["Hour"].between(0, 5)
 
-    df["Is_Noise"] = df["Service Request Type"].str.contains("noise", case=False, na=False)
-    df["Is_Water"] = df["Service Request Type"].str.contains("water", case=False, na=False)
-    df["Is_Transport"] = df["Service Request Type"].str.contains("transport|traffic", case=False, na=False)
-    df["Is_Other"] = ~(df["Is_Noise"] | df["Is_Water"] | df["Is_Transport"])
+    # Normalize once for safety
+    df["type_lower"] = df["Service Request Type"].str.lower()
 
+    # Waste & Sanitation
+    df["Is_Waste"] = df["type_lower"].str.contains(
+        "garbage|bin|recycle|waste|hazard|storm clean|solid waste",
+        na=False
+    )
+
+    # Roads & Transportation
+    df["Is_Roads"] = df["type_lower"].str.contains(
+        "road|pothole|sidewalk|bridge|traffic|debris",
+        na=False
+    )
+
+    # Water & Sewer
+    df["Is_Water_Sewer"] = df["type_lower"].str.contains(
+        "water|sewer|drain",
+        na=False
+    )
+
+    # Property & Bylaw
+    df["Is_Property"] = df["type_lower"].str.contains(
+        "property|zoning|construction|bylaw|standards",
+        na=False
+    )
+
+    # Trees & Environment
+    df["Is_Trees"] = df["type_lower"].str.contains(
+        "pruning|tree",
+        na=False
+    )
+
+    # Animal Services
+    df["Is_Animal"] = df["type_lower"].str.contains(
+        "wildlife|animal|stray",
+        na=False
+    )
+
+    # Noise
+    df["Is_Noise"] = df["type_lower"].str.contains(
+        "noise|amplified|fireworks",
+        na=False
+    )
+
+    # Everything else
+    df["Is_Other"] = ~(
+        df["Is_Waste"] |
+        df["Is_Roads"] |
+        df["Is_Water_Sewer"] |
+        df["Is_Property"] |
+        df["Is_Trees"] |
+        df["Is_Animal"] |
+        df["Is_Noise"]
+    )
+    
     return df
 
 
@@ -142,9 +194,13 @@ def build_geo_table(df, geo_column, min_year=None):
 
     geo_table["request_rate"] = geo_table["total_requests"] / len(working_df)
 
+    geo_table["%waste"] = geo_group["Is_Waste"].mean()
+    geo_table["%roads"] = geo_group["Is_Roads"].mean()
+    geo_table["%water_sewer"] = geo_group["Is_Water_Sewer"].mean()
+    geo_table["%property"] = geo_group["Is_Property"].mean()
+    geo_table["%trees"] = geo_group["Is_Trees"].mean()
+    geo_table["%animal"] = geo_group["Is_Animal"].mean()
     geo_table["%noise"] = geo_group["Is_Noise"].mean()
-    geo_table["%water"] = geo_group["Is_Water"].mean()
-    geo_table["%transport"] = geo_group["Is_Transport"].mean()
     geo_table["%other"] = geo_group["Is_Other"].mean()
 
     daily_counts = working_df.groupby(
@@ -176,6 +232,11 @@ if __name__ == "__main__":
 
     df = load_ckan_data()
     df = add_time_and_category_features(df)
+    
+    #learning how many types 
+    #print("Unique service types:", df["Service Request Type"].nunique())
+    #print("\nTop 20 Service Types:")
+    #print(df["Service Request Type"].value_counts().head(20))
 
     # GEO TABLES
     fsa_table = build_geo_table(df, "First 3 Chars of Postal Code")
@@ -186,33 +247,53 @@ if __name__ == "__main__":
         total_requests=("Service Request Type", "count"),
         percent_weekend=("Is_Weekend", "mean"),
         percent_noise=("Is_Noise", "mean"),
-        percent_water=("Is_Water", "mean"),
-        percent_transport=("Is_Transport", "mean"),
+        percent_waste=("Is_Waste", "mean"),
+        percent_roads=("Is_Roads", "mean"),
+        percent_water_sewer=("Is_Water_Sewer", "mean"),
+        percent_property=("Is_Property", "mean"),
+        percent_trees=("Is_Trees", "mean"),
+        percent_animal=("Is_Animal", "mean"),
         percent_other=("Is_Other", "mean"),
         night_indicator=("Is_Night", "mean"),
     ).reset_index()
 
     dow_table = df.groupby("Day_of_Week").agg(
         total_requests=("Service Request Type", "count"),
+        percent_weekend=("Is_Weekend", "mean"),
         percent_noise=("Is_Noise", "mean"),
-        percent_water=("Is_Water", "mean"),
-        percent_transport=("Is_Transport", "mean"),
+        percent_waste=("Is_Waste", "mean"),
+        percent_roads=("Is_Roads", "mean"),
+        percent_water_sewer=("Is_Water_Sewer", "mean"),
+        percent_property=("Is_Property", "mean"),
+        percent_trees=("Is_Trees", "mean"),
+        percent_animal=("Is_Animal", "mean"),
         percent_other=("Is_Other", "mean"),
-        weekend_indicator=("Is_Weekend", "mean"),
+        night_indicator=("Is_Night", "mean"),
     ).reset_index()
 
     month_table = df.groupby("Month").agg(
         total_requests=("Service Request Type", "count"),
+        percent_weekend=("Is_Weekend", "mean"),
         percent_noise=("Is_Noise", "mean"),
-        percent_water=("Is_Water", "mean"),
-        percent_transport=("Is_Transport", "mean"),
+        percent_waste=("Is_Waste", "mean"),
+        percent_roads=("Is_Roads", "mean"),
+        percent_water_sewer=("Is_Water_Sewer", "mean"),
+        percent_property=("Is_Property", "mean"),
+        percent_trees=("Is_Trees", "mean"),
+        percent_animal=("Is_Animal", "mean"),
+        percent_other=("Is_Other", "mean"),
+        night_indicator=("Is_Night", "mean"),
     ).reset_index()
 
-    service_table = df.groupby("Service Request Type").agg(
-        total_frequency=("Service Request Type", "count"),
-        geo_coverage=("Ward", "nunique"),
-        percent_weekend=("Is_Weekend", "mean"),
-    ).reset_index()
+    def build_service_table(df, geo_column):
+        return df.groupby("Service Request Type").agg(
+            total_frequency=("Service Request Type", "count"),
+            geo_coverage=(geo_column, "nunique"),
+            percent_weekend=("Is_Weekend", "mean"),
+        ).reset_index()
+        
+    service_table_fsa = build_service_table(df, "First 3 Chars of Postal Code")
+    service_table_ward = build_service_table(df, "Ward")
 
     with pd.ExcelWriter("CKAN_Feature_Tables.xlsx", engine="xlsxwriter") as writer:
         fsa_table.to_excel(writer, sheet_name="FSA", index=False)
@@ -220,6 +301,8 @@ if __name__ == "__main__":
         hour_table.to_excel(writer, sheet_name="Hour", index=False)
         dow_table.to_excel(writer, sheet_name="Day_of_Week", index=False)
         month_table.to_excel(writer, sheet_name="Month", index=False)
-        service_table.to_excel(writer, sheet_name="Service_Type", index=False)
+        service_table_fsa.to_excel(writer, sheet_name="Service_Type_FSA", index=False)
+        service_table_ward.to_excel(writer, sheet_name="Service_Type_Ward", index=False)
+
 
     print("Feature tables created successfully.")

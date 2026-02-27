@@ -97,12 +97,15 @@ def run_pca(X):
 
 xls = pd.ExcelFile(ENGINEERED_PATH)
 
-#Updated to work with both ward or postal 
-
-tables = {}
-
 # Detect available geo sheet dynamically
 available_sheets = xls.sheet_names
+
+
+#Updated to work with both ward or postal 
+tables = {}
+
+
+
 
 if "FSA" in available_sheets:
     tables["FSA"] = ("FSA", ["First 3 Chars of Postal Code"])
@@ -111,12 +114,24 @@ if "Ward" in available_sheets:
     tables["Ward"] = ("Ward", ["Ward"])
 
 # Always include non-geo tables
-tables.update({
-    "Hour": ("Hour", ["Hour"]),
-    "Day_of_Week": ("Day_of_Week", ["Day_of_Week"]),
-    "Month": ("Month", ["Month"]),
-    "Service_Type": ("Service_Type", ["Service Request Type"]),
-})
+
+if "Hour" in available_sheets:
+    tables["Hour"] = ("Hour", ["Hour"])
+
+if "Day_of_Week" in available_sheets:
+    tables["Day_of_Week"] = ("Day_of_Week", ["Day_of_Week"])
+
+if "Month" in available_sheets:
+    tables["Month"] = ("Month", ["Month"])
+
+# Service tables (geo-specific)
+if "Service_Type_FSA" in available_sheets:
+    tables["Service_Type_FSA"] = ("Service_Type_FSA", ["Service Request Type"])
+
+if "Service_Type_Ward" in available_sheets:
+    tables["Service_Type_Ward"] = ("Service_Type_Ward", ["Service Request Type"])
+
+
 
 summary_rows = []
 
@@ -170,6 +185,43 @@ with pd.ExcelWriter(PCA_OUTPUT, engine="xlsxwriter") as pca_writer, \
         )
 
         clustered_df.to_excel(cluster_writer, sheet_name=f"{table_name}_labels", index=False)
+        # ======================
+        # Category composition by cluster (geo only)
+        # ======================
+        if table_name in ["FSA", "Ward"]:
+
+            category_cols = [
+                "%waste", "%roads", "%water_sewer",
+                "%property", "%trees", "%animal",
+                "%noise", "%other"
+            ]
+
+            # Merge cluster labels back with original feature table
+            merged = df.merge(clustered_df[[id_cols[0], "cluster"]],
+                              on=id_cols[0])
+
+            cluster_category = merged.groupby("cluster")[category_cols].mean()
+
+            # Save to Excel
+            cluster_category.reset_index().to_excel(
+                cluster_writer,
+                sheet_name=f"{table_name}_cluster_categories",
+                index=False
+            )
+
+            # Plot
+            cluster_category.T.plot(kind="bar", figsize=(12,6))
+            plt.title(f"{table_name} Cluster Category Composition")
+            plt.ylabel("Average Proportion")
+            plt.xticks(rotation=45)
+            plt.legend(title="Cluster")
+            plt.tight_layout()
+
+            out_png = Path(f"{table_name}_cluster_categories.png")
+            plt.savefig(out_png, dpi=200)
+            plt.close()
+
+            print(f"Saved category composition plot: {out_png}")
 
         # ======================
         # Simple visualization (geo only)
