@@ -69,7 +69,7 @@ capstone-pca-and-clustering/
 
 ### Workflow Overview
 1. **Download and extract** raw 311 data files.
-2. **Place** them in the `data` folder.
+2. **Place** them in the `data` folder, which you create according to File Structure above.
 3. **Build** feature tables.
 4. **Run** temporal & category visualizations.
 5. **Run** PCA and clustering.
