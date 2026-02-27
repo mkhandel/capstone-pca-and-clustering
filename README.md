@@ -1,13 +1,41 @@
 # Capstone PCA and Clustering Pipeline
 
-This project builds engineered feature tables from Toronto 311 CKAN data and performs PCA and clustering analysis at the FSA and Ward level.
+This project transforms raw Toronto 311 CKAN data into engineered feature sets to perform categorical, temporal, and spatial analysis. By leveraging Principal Component Analysis (PCA) and K-Means Clustering, the pipeline identifies structural patterns in municipal service requests across Toronto’s unique FSAs and Wards.
 
----
+## Pipeline Core Components
+### 1. Categorical Classification
+Service requests are processed through rule-based buckets to standardize high-volume data:
+
+Waste & Sanitation | Roads & Transportation | Water & Sewer
+
+Property & Bylaw | Trees & Environment | Animal Services
+
+Noise | Other
+
+### 2. Temporal Feature Engineering
+The model extracts multi-dimensional time features to identify cyclical patterns:
+
+Cycles: Hour of day, Day of week, Month, Year.
+
+Indicators: Weekend vs. Weekday, Nighttime vs. Daytime.
+
+### 3. Geographic Aggregation
+Data is pivoted and normalized at two distinct administrative levels:
+
+FSA Level: Postal prefix analysis for granular neighborhood trends.
+
+Ward Level: Municipal administrative boundary analysis (2018+ Ward structures).
+
+### 4. Dimensionality Reduction & Clustering
+PCA: Reduces dimensionality while preserving maximum variance to visualize geographic complaint profiles.
+
+Clustering: Uses silhouette scores to automatically determine and assign optimal groupings of similar urban areas.
 
 ## Project Structure
 
 ### Primary Scripts
 * `pipeline/build_feature_tables.py`
+* `pipeline/temporal_visualizations.py`
 * `pipeline/pca_and_clustering.py`
 
 ### Overall File Structure
@@ -33,6 +61,7 @@ capstone-pca-and-clustering/
 │   └── SR2026.csv
 ├── pipeline/
 │   ├── build_feature_tables.py
+│   ├── temporal_visualizations.py
 │   └── pca_and_clustering.py
 ├── requirements.txt
 └── README.md
@@ -42,7 +71,8 @@ capstone-pca-and-clustering/
 1. **Download and extract** raw 311 data files.
 2. **Place** them in the `data` folder.
 3. **Build** feature tables.
-4. **Run** PCA and clustering.
+4. **Run** temporal & category visualizations.
+5. **Run** PCA and clustering.
 
 ---
 
@@ -86,17 +116,35 @@ Run the following command:
 * Apply FSA filtering.
 * Apply Ward 2018+ filtering.
 * Engineer time and category features.
+* Generate aggregated feature tables.
 * Export `CKAN_Feature_Tables.xlsx`.
 
 ---
 
-## 4. Run PCA and Clustering
+## 4. Run Temporal & Category Visualizations
+
+After feature tables are created, run:
+<pre>python pipeline/temporal_visualizations.py</pre>
+
+**This script will:**
+* Generate yearly request trends.
+* Generate monthly seasonal patterns.
+* Generate hour-of-day distributions.
+* Generate weekday vs weekend comparisons.
+* Produce category-level summaries over time.
+* Export visualizations as image files.
+
+---
+
+## 5. Run PCA and Clustering
 
 After feature tables are created, run:
 <pre>python pipeline/pca_and_clustering.py</pre>
 
 **This script will:**
-* Perform PCA on FSA and Ward tables.
-* Apply clustering.
-* Generate PCA plots.
+* Perform PCA on FSA and Ward feature tables.
+* Automatically determine optimal cluster count using silhouette score.
+* Apply K-means clustering.
+* Generate PCA cluster plots.
+* Generate cluster category composition plots.
 * Export PCA and clustering results.
