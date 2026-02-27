@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt #added for visualization
 from pathlib import Path
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+
 
 
 # =========================================
@@ -95,13 +97,26 @@ def run_pca(X):
 
 xls = pd.ExcelFile(ENGINEERED_PATH)
 
-tables = {
-    "Ward": ("Ward", ["Ward"]),
+#Updated to work with both ward or postal 
+
+tables = {}
+
+# Detect available geo sheet dynamically
+available_sheets = xls.sheet_names
+
+if "FSA" in available_sheets:
+    tables["FSA"] = ("FSA", ["First 3 Chars of Postal Code"])
+
+if "Ward" in available_sheets:
+    tables["Ward"] = ("Ward", ["Ward"])
+
+# Always include non-geo tables
+tables.update({
     "Hour": ("Hour", ["Hour"]),
     "Day_of_Week": ("Day_of_Week", ["Day_of_Week"]),
     "Month": ("Month", ["Month"]),
     "Service_Type": ("Service_Type", ["Service Request Type"]),
-}
+})
 
 summary_rows = []
 
@@ -155,6 +170,61 @@ with pd.ExcelWriter(PCA_OUTPUT, engine="xlsxwriter") as pca_writer, \
         )
 
         clustered_df.to_excel(cluster_writer, sheet_name=f"{table_name}_labels", index=False)
+
+        # ======================
+        # Simple visualization (geo only)
+        # ======================
+        if table_name in ["FSA", "Ward"]:
+
+            plt.figure(figsize=(10, 8))
+
+            if "PC1" in clustered_df.columns and "PC2" in clustered_df.columns:
+
+                # Plot clusters
+                for c in sorted(clustered_df["cluster"].unique()):
+                    sub = clustered_df[clustered_df["cluster"] == c]
+
+                    plt.scatter(
+                        sub["PC1"],
+                        sub["PC2"],
+                        label=f"Cluster {c}",
+                        alpha=0.75
+                    )
+
+                # Label ALL geo units (FSA or Ward)
+                for _, row in clustered_df.iterrows():
+
+                    label_value = row[id_cols[0]]
+
+                    if pd.isna(label_value):
+                        continue
+
+                    label_value = str(label_value).strip()
+
+                    plt.text(
+                        row["PC1"],
+                        row["PC2"],
+                        label_value,
+                        fontsize=7,
+                        ha="center",
+                        va="center",
+                        alpha=0.9
+                    )
+
+                plt.xlabel("PC1")
+                plt.ylabel("PC2")
+                plt.title(f"{table_name}: PCA (PC1 vs PC2)")
+                plt.legend()
+                plt.grid(True)
+
+                out_png = Path(f"{table_name}_pca_clusters.png")
+                plt.savefig(out_png, dpi=200, bbox_inches="tight")
+                print(f"Saved plot: {out_png}")
+
+                plt.close()
+                
+
+       
 
         centers_df = pd.DataFrame(
             kmeans.cluster_centers_,

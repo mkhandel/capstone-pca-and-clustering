@@ -1,21 +1,43 @@
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 # ----------------------------
-# Load raw CKAN CSV
+# Load ALL raw CKAN CSVs
 # ----------------------------
 
-# Read with python engine (handles irregular rows)
-df = pd.read_csv(
-    "SR2026.csv",
-    encoding="latin1",
-    engine="python",
-    usecols=range(9)   # <-- Only read first 9 columns
-)
+data_path = Path("data")
+csv_files = list(data_path.glob("*.csv"))
 
-# If file has extra column(s), keep only first 9
+if len(csv_files) == 0:
+    raise FileNotFoundError("No CSV files found in /data folder")
+
+all_dfs = []
+
+for file in csv_files:
+    print(f"Loading {file.name}...")
+    
+    temp_df = pd.read_csv(
+        file,
+        encoding="latin1",
+        engine="python",
+        usecols=range(9)
+    )
+
+    if temp_df.shape[1] > 9:
+        temp_df = temp_df.iloc[:, :9]
+
+    all_dfs.append(temp_df)
+
+df = pd.concat(all_dfs, ignore_index=True)
+
+print(f"Combined dataset BEFORE trimming: {df.shape}")
+
+# Force exactly 9 columns safely
 if df.shape[1] > 9:
     df = df.iloc[:, :9]
+
+print(f"Combined dataset AFTER trimming: {df.shape}")
 
 # Rename columns explicitly to ensure consistency
 df.columns = [
@@ -34,13 +56,60 @@ df.columns = [
 # Basic Cleaning
 # ----------------------------
 df["Creation Date"] = pd.to_datetime(df["Creation Date"], errors="coerce")
-df = df.dropna(subset=["Creation Date", "Ward", "Service Request Type"])
+
+total_rows_initial = len(df)
+
+# Count pre-2018 rows BEFORE filtering
+pre_2018_rows = (df["Creation Date"].dt.year < 2018).sum()
+
+print("----- Pre-2018 Filter -----")
+print(f"Total rows before year filter: {total_rows_initial:,}")
+print(f"Rows removed (pre-2018 ward structure): {pre_2018_rows:,}")
+print(f"Percent removed: {pre_2018_rows / total_rows_initial * 100:.2f}%")
+print("--------------------------------")
+
+# Now apply 2018+ filter
+df = df[df["Creation Date"].dt.year >= 2018]
+
+# ---- Ward diagnostics AFTER year filter ----
+total_rows_post_year = len(df)
+
+missing_ward = df["Ward"].isna().sum()
+unknown_ward = df["Ward"].astype(str).str.strip().str.lower().eq("unknown").sum()
+empty_ward = df["Ward"].astype(str).str.strip().eq("").sum()
+
+valid_mask = (
+    df["Ward"].notna()
+    & (df["Ward"].astype(str).str.strip() != "")
+    & (df["Ward"].astype(str).str.strip().str.lower() != "unknown")
+)
+
+valid_rows = valid_mask.sum()
+invalid_rows = total_rows_post_year - valid_rows
+
+print("----- Ward Removal Diagnostics -----")
+print(f"Total rows (post-2018): {total_rows_post_year:,}")
+print(f"Missing Ward: {missing_ward:,}")
+print(f"Unknown Ward: {unknown_ward:,}")
+print(f"Empty Ward: {empty_ward:,}")
+print(f"Invalid / removed rows: {invalid_rows:,}")
+print(f"Percent removed: {invalid_rows / total_rows_post_year * 100:.2f}%")
+print("------------------------------------")
+
+df = df[valid_mask]
+df = df.dropna(subset=["Creation Date", "Service Request Type"])
 
 # ----------------------------
 # Time Features
 # ----------------------------
 df["Hour"] = df["Creation Date"].dt.hour
 df["Day_of_Week"] = df["Creation Date"].dt.day_name()
+#put days in chronological order
+df["Day_of_Week"] = pd.Categorical(
+    df["Day_of_Week"],
+    categories=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+    ordered=True
+)
 df["Month"] = df["Creation Date"].dt.month
 df["Is_Weekend"] = df["Creation Date"].dt.weekday >= 5
 df["Is_Night"] = df["Hour"].between(22, 23) | df["Hour"].between(0, 5)

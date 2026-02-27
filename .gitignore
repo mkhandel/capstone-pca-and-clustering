@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.xlsx
+
+FSA_Results/
+Ward_Results/
+PCA_Results/
+Clustering_Results/
+
+data/
