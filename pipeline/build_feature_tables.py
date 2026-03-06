@@ -269,15 +269,45 @@ if __name__ == "__main__":
         percent = count / len(df) * 100
         print(f"{c}: {count:,} ({percent:.2f}%)")
     
-    #Determining Top Contributers to OTHER Category
-    #print("\nTop 50 Service Types Currently Classified as OTHER:\n")
+    # =====================================================
+    # TOP CONTRIBUTORS TO EACH CATEGORY
+    # =====================================================
 
-    #other_types = df[df["Is_Other"]]["Service Request Type"].value_counts()
+    print("\nTop contributors to each category:\n")
 
-    #print(other_types.head(50))
-    #other_types.to_excel("Service_Types_In_Other.xlsx")
+    categories = [
+        "Is_Waste",
+        "Is_Roads",
+        "Is_Water_Sewer",
+        "Is_Property",
+        "Is_Environment",
+        "Is_Animal",
+        "Is_Noise"
+    ]
 
-    #Determining how many different service request types and what they are
+    top_contributors = {}
+
+    for cat in categories:
+        print(f"\nTop 25 service types in {cat}:\n")
+        
+        top = (
+            df[df[cat] == 1]["Service Request Type"]
+            .value_counts()
+            .head(25)
+        )
+        
+        print(top)
+        
+        # store for Excel export
+        top_contributors[cat] = top.reset_index()
+        top_contributors[cat].columns = ["Service Request Type", "Count"]
+
+    # Save to Excel
+    with pd.ExcelWriter("Top_Service_Type_Contributors_By_Category.xlsx") as writer:
+        for cat, table in top_contributors.items():
+            table.to_excel(writer, sheet_name=cat, index=False)
+            
+    
     print("\nTotal unique service request types:", df["Service Request Type"].nunique())
 
     service_counts = df["Service Request Type"].value_counts()
