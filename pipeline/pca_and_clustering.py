@@ -192,7 +192,7 @@ with pd.ExcelWriter(PCA_OUTPUT, engine="xlsxwriter") as pca_writer, \
 
             category_cols = [
                 "%waste", "%roads", "%water_sewer",
-                "%property", "%trees", "%animal",
+                "%property", "%environmental", "%animal",
                 "%noise", "%other"
             ]
 

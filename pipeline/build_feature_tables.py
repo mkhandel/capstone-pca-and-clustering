@@ -69,49 +69,60 @@ def add_time_and_category_features(df):
     df["Is_Weekend"] = df["Creation Date"].dt.weekday >= 5
     df["Is_Night"] = df["Hour"].between(22, 23) | df["Hour"].between(0, 5)
 
-    # Normalize once for safety
-    df["type_lower"] = df["Service Request Type"].str.lower()
+    # Better Normalization
+    df["type_lower"] = (
+    df["Service Request Type"]
+    .str.lower()
+    .str.replace("-", " ")
+    .str.replace("/", " ")
+)
 
     # Waste & Sanitation
     df["Is_Waste"] = df["type_lower"].str.contains(
-        "garbage|bin|recycle|waste|hazard|storm clean|solid waste",
+        r"garbage|bin|recycle|waste|hazard|storm clean|solid waste|dump|litter|collection|pickup|appliance|furniture|cart|yard waste|white goods|pickup request|not picked up|needles|excrement|pollution",
         na=False
     )
 
     # Roads & Transportation
     df["Is_Roads"] = df["type_lower"].str.contains(
-        "road|pothole|sidewalk|bridge|traffic|debris",
+        r"road|pothole|sidewalk|bridge|traffic|debris|snow|salting|salt|icy|plow|plough|bollards|windrow|curb|asphalt|lane|sign|signal|streetlight|pavement|walkway|sink hole|culvert|maintenance hole|expressway|guardrail|intersection|driveway|parking|bollard|pxo",
         na=False
     )
 
     # Water & Sewer
     df["Is_Water_Sewer"] = df["type_lower"].str.contains(
-        "water|sewer|drain",
+        r"water|sewer|drain|flood|hydrant|leak|basin|catch basin|stormwater",
         na=False
     )
 
     # Property & Bylaw
     df["Is_Property"] = df["type_lower"].str.contains(
-        "property|zoning|construction|bylaw|standards",
+        r"property standards|property|permit|zoning|construction|by law|bylaw|standards|building|fence|graffiti",
         na=False
     )
 
-    # Trees & Environment
-    df["Is_Trees"] = df["type_lower"].str.contains(
-        "pruning|tree",
+    # Environment
+    df["Is_Environment"] = df["type_lower"].str.contains(
+        r"tree|pruning|branch|fallen tree|stump|forestry|grass|weed|weeds|leaf|stemming",
         na=False
     )
 
     # Animal Services
     df["Is_Animal"] = df["type_lower"].str.contains(
-        "wildlife|animal|stray",
+        r"animal|wildlife|stray|raccoon|dog|cat|dead animal|injured animal|bee|wasp|hornet|hive|cadaver|injured|moth",
         na=False
     )
 
     # Noise
     df["Is_Noise"] = df["type_lower"].str.contains(
-        "noise|amplified|fireworks",
+        r"noise|amplified|music|party|loud|fireworks",
         na=False
+    )
+    
+    #Admin
+    df["Is_Admin"] = df["type_lower"].str.contains(
+    r"complaint|compliment|staff|operator|operations|timeline|service complaint|suggestion|contractor complaint",
+    na=False
     )
 
     # Everything else
@@ -120,9 +131,10 @@ def add_time_and_category_features(df):
         df["Is_Roads"] |
         df["Is_Water_Sewer"] |
         df["Is_Property"] |
-        df["Is_Trees"] |
+        df["Is_Environment"] |
         df["Is_Animal"] |
-        df["Is_Noise"]
+        df["Is_Noise"] |
+        df["Is_Admin"]
     )
     
     return df
@@ -198,7 +210,7 @@ def build_geo_table(df, geo_column, min_year=None):
     geo_table["%roads"] = geo_group["Is_Roads"].mean()
     geo_table["%water_sewer"] = geo_group["Is_Water_Sewer"].mean()
     geo_table["%property"] = geo_group["Is_Property"].mean()
-    geo_table["%trees"] = geo_group["Is_Trees"].mean()
+    geo_table["%environmental"] = geo_group["Is_Environment"].mean()
     geo_table["%animal"] = geo_group["Is_Animal"].mean()
     geo_table["%noise"] = geo_group["Is_Noise"].mean()
     geo_table["%other"] = geo_group["Is_Other"].mean()
@@ -233,10 +245,57 @@ if __name__ == "__main__":
     df = load_ckan_data()
     df = add_time_and_category_features(df)
     
-    #learning how many types 
-    #print("Unique service types:", df["Service Request Type"].nunique())
-    #print("\nTop 20 Service Types:")
-    #print(df["Service Request Type"].value_counts().head(20))
+    
+    # =====================================================
+    # SERVICE TYPE ANALYSIS (FOR BETTER BUCKETING)
+    # =====================================================
+    
+    #Printing out Different Category Counts and Percentages
+    print("\nCategory Counts:")
+
+    categories = [
+        "Is_Waste",
+        "Is_Roads",
+        "Is_Water_Sewer",
+        "Is_Property",
+        "Is_Environment",
+        "Is_Animal",
+        "Is_Noise",
+        "Is_Other"
+        ]
+
+    for c in categories:
+        count = df[c].sum()
+        percent = count / len(df) * 100
+        print(f"{c}: {count:,} ({percent:.2f}%)")
+    
+    #Determining Top Contributers to OTHER Category
+    #print("\nTop 50 Service Types Currently Classified as OTHER:\n")
+
+    #other_types = df[df["Is_Other"]]["Service Request Type"].value_counts()
+
+    #print(other_types.head(50))
+    #other_types.to_excel("Service_Types_In_Other.xlsx")
+
+    #Determining how many different service request types and what they are
+    print("\nTotal unique service request types:", df["Service Request Type"].nunique())
+
+    service_counts = df["Service Request Type"].value_counts()
+
+    print("\nTop 1000 Service Request Types:\n")
+    print(service_counts.head(1000))
+
+    service_counts.head(1000).to_excel(
+        "Top_1000_Service_Request_Types.xlsx",
+        sheet_name="Top_Service_Types"
+    )
+
+    top1000_total = service_counts.head(1000).sum()
+    coverage = top1000_total / len(df) * 100
+
+    print(f"\nTop 1000 types cover {coverage:.2f}% of all requests")
+    
+    
 
     # GEO TABLES
     fsa_table = build_geo_table(df, "First 3 Chars of Postal Code")
@@ -251,7 +310,7 @@ if __name__ == "__main__":
         percent_roads=("Is_Roads", "mean"),
         percent_water_sewer=("Is_Water_Sewer", "mean"),
         percent_property=("Is_Property", "mean"),
-        percent_trees=("Is_Trees", "mean"),
+        percent_trees=("Is_Environment", "mean"),
         percent_animal=("Is_Animal", "mean"),
         percent_other=("Is_Other", "mean"),
         night_indicator=("Is_Night", "mean"),
@@ -265,7 +324,7 @@ if __name__ == "__main__":
         percent_roads=("Is_Roads", "mean"),
         percent_water_sewer=("Is_Water_Sewer", "mean"),
         percent_property=("Is_Property", "mean"),
-        percent_trees=("Is_Trees", "mean"),
+        percent_trees=("Is_Environment", "mean"),
         percent_animal=("Is_Animal", "mean"),
         percent_other=("Is_Other", "mean"),
         night_indicator=("Is_Night", "mean"),
@@ -279,7 +338,7 @@ if __name__ == "__main__":
         percent_roads=("Is_Roads", "mean"),
         percent_water_sewer=("Is_Water_Sewer", "mean"),
         percent_property=("Is_Property", "mean"),
-        percent_trees=("Is_Trees", "mean"),
+        percent_trees=("Is_Environment", "mean"),
         percent_animal=("Is_Animal", "mean"),
         percent_other=("Is_Other", "mean"),
         night_indicator=("Is_Night", "mean"),
